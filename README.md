@@ -4,7 +4,7 @@ A GitHub Issues-driven Infrastructure Copilot lab using Terraform modules, GenAI
 
 ## Repositories
 
-- [Terraform AWS modules](https://github.com/DeanReyes/terraform-aws-modules)
+- [Terraform AWS modules](modules/) (en este mismo repositorio)
 - [Cloud governance policies](https://github.com/DeanReyes/cloud-governance)
 
 ## Current MVP

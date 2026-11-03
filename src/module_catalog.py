@@ -5,7 +5,7 @@ import os
 import re
 import urllib.request
 
-MODULE_REPO = "DeanReyes/terraform-aws-modules"
+MODULE_REPO = "DeanReyes/genai-infrastructure-platform"
 
 
 def api(path):

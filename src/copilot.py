@@ -14,7 +14,7 @@ MODEL = os.environ.get("LLM_MODEL", "gpt-5.4-nano")
 OWNER = os.environ.get("GITHUB_REPOSITORY", "DeanReyes/genai-infrastructure-platform").split("/")[0]
 TEMPLATE_OWNER = "DeanReyes"
 TEMPLATE_REPO = "terraform-infrastructure-template"
-MODULE_REPO = "DeanReyes/terraform-aws-modules"
+MODULE_REPO = "DeanReyes/genai-infrastructure-platform"
 
 
 def gh(*args, env=None):
