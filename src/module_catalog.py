@@ -5,7 +5,7 @@ import os
 import re
 import urllib.request
 
-MODULE_REPO = "aldo2510/terraform-aws-modules"
+MODULE_REPO = "DeanReyes/terraform-aws-modules"
 
 
 def api(path):
