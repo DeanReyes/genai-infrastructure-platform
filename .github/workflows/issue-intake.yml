@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   intake:
-    if: contains(github.event.issue.labels.*.name, 'infrastructure-request')
+    if: contains(github.event.issue.labels.*.name, 'infrastructure-request') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Explain next steps

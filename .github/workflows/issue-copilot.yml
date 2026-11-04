@@ -14,8 +14,8 @@ permissions:
 jobs:
   copilot:
     if: |
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'infrastructure-request')) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request == null && github.event.comment.user.type != 'Bot' && contains(github.event.issue.labels.*.name, 'infrastructure-request'))
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'infrastructure-request') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request == null && github.event.comment.user.type != 'Bot' && contains(github.event.issue.labels.*.name, 'infrastructure-request') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
