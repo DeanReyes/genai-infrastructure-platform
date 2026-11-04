@@ -23,16 +23,19 @@ jobs:
           gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "$(cat <<'EOF'
           ## Infrastructure Copilot
 
-          I received your request. This lab's first iteration supports the **S3 module** and does not deploy AWS resources.
+          I received your request. This lab's platform currently supports two modules:
+          - **ECR**: container image repository
+          - **Secrets Manager**: secret container (the real value is loaded outside Terraform)
 
           Please make sure the request includes:
-          - bucket_name: globally unique S3 bucket name (lowercase, 3-63 characters)
+          - aplicación: application or team name in lowercase, for example pagos
+          - module: ECR or Secrets Manager
+          - repository_name (ECR) or secret_name (Secrets Manager), for example pagos/api or pagos/dev/db-password
           - environment: dev, test, staging, or prod
           - region: AWS region, for example us-east-1
-          - versioning_enabled: true or false (defaults to true; governance may require it)
 
           Reply in a comment with missing values using key: value lines. Do not post secrets or customer data.
 
-          **Current mode:** intake and clarification only. The next iteration will add LLM-based intent parsing, policy validation and PR generation. No Terraform apply is configured.
+          **Current mode:** the Copilot extracts the parameters, validates them against the module catalog and opens a Pull Request with Terraform. No AWS resources are created and no Terraform apply is configured.
           EOF
           )"

@@ -12,10 +12,24 @@ body:
     id: request
     attributes:
       label: Infrastructure request
-      description: Example: Create a private S3 bucket for application documents.
-      placeholder: I need an S3 bucket for ...
+      description: "Example: I need a container image repository for the payments API."
+      placeholder: I need an ECR repository for ...
     validations:
       required: true
+  - type: input
+    id: application
+    attributes:
+      label: Application or team (optional)
+      description: Lowercase letters, numbers and hyphens. Used to name the infrastructure repository (infra-<name>).
+      placeholder: pagos
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module (optional)
+      description: Leave empty if you are not sure; the assistant will choose from the available modules.
+      options:
+        - ECR (container image repository)
+        - Secrets Manager (secret container)
   - type: input
     id: environment
     attributes:
@@ -27,7 +41,8 @@ body:
       label: AWS region (optional)
       placeholder: us-east-1
   - type: input
-    id: bucket_name
+    id: resource_name
     attributes:
-      label: Bucket name (optional)
-      placeholder: my-app-documents-dev
+      label: Resource name (optional)
+      description: "Repository name for ECR (pagos/api) or secret name for Secrets Manager (pagos/dev/db-password). Never put the secret value here."
+      placeholder: pagos/api
