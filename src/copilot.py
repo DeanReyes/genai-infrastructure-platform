@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import urllib.error
 import urllib.request
 
@@ -22,6 +23,19 @@ def gh(*args, env=None):
     if env:
         merged_env.update(env)
     return subprocess.run(["gh", *args], text=True, check=True, capture_output=True, env=merged_env).stdout.strip()
+
+
+def wait_for_branch(checkout, env, branch, attempts=12, delay=10):
+    # La plantilla se copia de forma asincrona: el repo puede existir antes que su rama.
+    for _ in range(attempts):
+        found = subprocess.run(
+            ["git", "ls-remote", "--exit-code", "--heads", "origin", branch],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, cwd=checkout
+        ).returncode == 0
+        if found:
+            return
+        time.sleep(delay)
+    raise RuntimeError("La rama " + branch + " no aparecio en el repositorio generado. No se creo el Pull Request.")
 
 
 def issue_comment(repo, number, body):
@@ -287,6 +301,7 @@ def main():
             subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=True, cwd=checkout)
             # Always base the proposal branch on the target repository's default branch.
             # A branch created from an unrelated/orphan history cannot be used as a PR head.
+            wait_for_branch(checkout, git_env, default_branch)
             subprocess.run(
                 ["git", "fetch", "origin", default_branch],
                 check=True, env=git_env, cwd=checkout
