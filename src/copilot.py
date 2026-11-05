@@ -9,8 +9,8 @@ import urllib.request
 
 API_KEY = os.environ.get("LLM_API_KEY", "")
 GH_PLATFORM_TOKEN = os.environ.get("GH_PLATFORM_TOKEN", "")
-BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-MODEL = os.environ.get("LLM_MODEL", "gpt-5.4-nano")
+BASE_URL = (os.environ.get("LLM_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+MODEL = os.environ.get("LLM_MODEL") or "gpt-4o-mini"
 OWNER = os.environ.get("GITHUB_REPOSITORY", "DeanReyes/genai-infrastructure-platform").split("/")[0]
 TEMPLATE_OWNER = "DeanReyes"
 TEMPLATE_REPO = "terraform-infrastructure-template"
