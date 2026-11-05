@@ -37,3 +37,16 @@ module "secrets_manager" {
   recovery_window_in_days = 7
   tags                    = local.tags
 }
+
+# Para la demostracion, el rol lo puede asumir el mismo usuario que ejecuta Terraform.
+# En una aplicacion real se indicaria el rol de la tarea de ECS o del pod de EKS.
+data "aws_caller_identity" "current" {}
+
+module "secret_reader" {
+  source = "../../modules/iam-secret-reader"
+
+  role_name              = "${var.app_name}-dev-secret-reader"
+  secret_arns            = [module.secrets_manager.secret_arn]
+  trusted_principal_arns = [data.aws_caller_identity.current.arn]
+  tags                   = local.tags
+}

@@ -7,3 +7,8 @@ output "secret_arn" {
   description = "ARN del secreto creado"
   value       = module.secrets_manager.secret_arn
 }
+
+output "secret_reader_role_arn" {
+  description = "ARN del rol que puede leer el secreto"
+  value       = module.secret_reader.role_arn
+}
