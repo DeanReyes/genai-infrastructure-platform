@@ -73,7 +73,8 @@ def validate(data, catalog=None):
     if not isinstance(params, dict):
         params = {}
     declared = {v["name"]: v for v in module["variables"]}
-    data["parameters"] = {k: v for k, v in params.items() if k in declared}
+    # Descarta null: un valor null se escribiria como "null" en Terraform y rompe variables con validacion.
+    data["parameters"] = {k: v for k, v in params.items() if k in declared and v is not None}
     for name, variable in declared.items():
         if variable["required"] and name not in data["parameters"]:
             errors.append("Para el módulo " + module["name"] + ", ¿qué valor debe tener " + name + "? " + variable["description"])
