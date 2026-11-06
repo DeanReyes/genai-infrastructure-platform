@@ -34,6 +34,16 @@ El Copilot descubre los módulos automáticamente leyendo `modules/*/variables.t
 5. **Repositorio y Pull Request:** con los datos completos, crea el repositorio `infra-<aplicación>` a partir de la plantilla `terraform-infrastructure-template`, y abre un Pull Request con un `main.tf` que referencia el módulo elegido y un `REQUEST.md` con el resumen de la solicitud.
 6. **Revisión:** el workflow de validación de la plantilla ejecuta `terraform init` y `terraform validate` en el Pull Request. Una persona lo revisa y decide.
 
+El workflow `issue-copilot` se divide en tres jobs encadenados, que se ven como un grafo en la pestaña **Actions**:
+
+| Job | Qué hace | Secretos que usa |
+|---|---|---|
+| `extraer` | El LLM extrae los parámetros del issue (`python src/copilot.py extract`). | `LLM_API_KEY` |
+| `validar` | Los contrasta con el catálogo; si faltan datos, los pide en el issue y se detiene (`validate`). | Ninguno propio |
+| `proponer` | Crea el repositorio y abre el Pull Request (`propose`). | `GH_PLATFORM_TOKEN` |
+
+Los datos pasan de un job al siguiente como *outputs* (parámetros de la solicitud, nunca secretos), y cada job declara solo los permisos que necesita.
+
 Si ya existe un repositorio para esa aplicación y su README coincide con la plantilla, se reutiliza en lugar de crear otro.
 
 ## Configuración

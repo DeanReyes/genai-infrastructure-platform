@@ -6,37 +6,77 @@ on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+# Sin permisos por defecto: cada job pide solo lo que necesita.
+permissions: {}
 
+# Tres etapas encadenadas. Los datos pasan de un job al siguiente como outputs
+# (parametros de la solicitud, nunca secretos).
+#   extraer  -> el LLM extrae los parametros del issue
+#   validar  -> se contrastan con el catalogo; si faltan datos, se piden en el issue y se detiene
+#   proponer -> crea el repositorio y abre el Pull Request (nunca ejecuta terraform apply)
 jobs:
-  copilot:
+  extraer:
+    name: 1. Extraer con el LLM
     if: |
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'infrastructure-request') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request == null && github.event.comment.user.type != 'Bot' && contains(github.event.issue.labels.*.name, 'infrastructure-request') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      continuar: ${{ steps.extraer.outputs.continuar }}
+      extraccion: ${{ steps.extraer.outputs.extraccion }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.repository.default_branch }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install GitHub CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gh
-      - name: Conversational infrastructure intake
+      - name: Extraer parametros
+        id: extraer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_PLATFORM_TOKEN: ${{ secrets.GH_PLATFORM_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: python src/copilot.py
+        run: python3 src/copilot.py extract
+
+  validar:
+    name: 2. Validar contra el catalogo
+    needs: extraer
+    if: needs.extraer.outputs.continuar == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      listo: ${{ steps.validar.outputs.listo }}
+      solicitud: ${{ steps.validar.outputs.solicitud }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Validar la solicitud
+        id: validar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXTRACTION_JSON: ${{ needs.extraer.outputs.extraccion }}
+        run: python3 src/copilot.py validate
+
+  proponer:
+    name: 3. Crear repositorio y Pull Request
+    needs: validar
+    if: needs.validar.outputs.listo == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Crear repositorio y abrir Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PLATFORM_TOKEN: ${{ secrets.GH_PLATFORM_TOKEN }}
+          REQUEST_JSON: ${{ needs.validar.outputs.solicitud }}
+        run: python3 src/copilot.py propose
