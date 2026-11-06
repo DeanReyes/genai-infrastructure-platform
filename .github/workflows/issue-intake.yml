@@ -1,8 +1,11 @@
 name: Infrastructure Issue Intake
 
+# DESACTIVADO para evitar consumo de minutos de Actions.
+# Para reactivar, restaura el disparador:
+#   issues:
+#     types: [opened]
 on:
-  issues:
-    types: [opened]
+  workflow_dispatch:
 
 permissions:
   issues: write

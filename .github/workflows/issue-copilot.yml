@@ -1,10 +1,13 @@
 name: Infrastructure Copilot
 
+# DESACTIVADO para evitar consumo (minutos de Actions y llamadas al LLM).
+# Para reactivar, restaura estos disparadores:
+#   issues:
+#     types: [opened]
+#   issue_comment:
+#     types: [created]
 on:
-  issues:
-    types: [opened]
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
 
 # Sin permisos por defecto: cada job pide solo lo que necesita.
 permissions: {}
