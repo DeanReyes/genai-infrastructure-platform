@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.error
@@ -172,38 +173,67 @@ def create_repo_from_template(repo_name):
         raise RuntimeError("GitHub could not generate the repository from the template (HTTP " + str(exc.code) + "): " + detail) from exc
 
 
-def main():
-    event_path = os.environ["GITHUB_EVENT_PATH"]
-    with open(event_path, encoding="utf-8") as event_file:
+
+def set_output(name, value):
+    """Publica un output del paso para que los jobs siguientes lo lean."""
+    line = name + "=" + value + "\n"
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as out:
+            out.write(line)
+    else:
+        print(line, end="")
+
+
+def to_json_line(data):
+    # Una sola linea y solo ASCII: GITHUB_OUTPUT guarda un valor por linea.
+    return json.dumps(data, ensure_ascii=True, separators=(",", ":"))
+
+
+def read_context():
+    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as event_file:
         event = json.load(event_file)
     issue = event["issue"]
     comment = event.get("comment", {})
-    if comment.get("user", {}).get("type") == "Bot":
-        return
-    command = comment.get("body", "").strip()
-    source_repo = os.environ["GITHUB_REPOSITORY"]
-    number = str(issue["number"])
     event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if event_name == "issue_comment" and issue.get("pull_request"):
-        return
+    skip = comment.get("user", {}).get("type") == "Bot" or (event_name == "issue_comment" and bool(issue.get("pull_request")))
+    return {
+        "issue": issue,
+        "event_name": event_name,
+        "command": comment.get("body", "").strip(),
+        "source_repo": os.environ["GITHUB_REPOSITORY"],
+        "number": str(issue["number"]),
+        "skip": skip,
+    }
 
-    # Combine the original request with all user replies, allowing conversational follow-up.
-    conversation = ""
-    if event_name == "issue_comment":
-        try:
-            conversation = gh("api", "repos/" + source_repo + "/issues/" + number + "/comments", "--paginate", "--jq", ".[].body")
-        except Exception:
-            conversation = command
-    issue_text = (
-        "Issue title:\n" + issue.get("title", "") +
-        "\nIssue description:\n" + issue.get("body", "") +
-        "\nConversation comments:\n" + conversation
-    )[:16000]
+
+def report_failure(ctx, exc):
+    issue_comment(ctx["source_repo"], ctx["number"], "I couldn't complete the request: " + str(exc)[:1500] + "\nNo AWS resources were deployed.")
+
+
+def stage_extract():
+    """Etapa 1: el LLM extrae los parametros del issue. No escribe nada en GitHub salvo si falla."""
+    ctx = read_context()
+    if ctx["skip"]:
+        set_output("continuar", "false")
+        return
     try:
+        # Combine the original request with all user replies, allowing conversational follow-up.
+        conversation = ""
+        if ctx["event_name"] == "issue_comment":
+            try:
+                conversation = gh("api", "repos/" + ctx["source_repo"] + "/issues/" + ctx["number"] + "/comments", "--paginate", "--jq", ".[].body")
+            except Exception:
+                conversation = ctx["command"]
+        issue = ctx["issue"]
+        issue_text = (
+            "Issue title:\n" + issue.get("title", "") +
+            "\nIssue description:\n" + issue.get("body", "") +
+            "\nConversation comments:\n" + conversation
+        )[:16000]
         data = llm_extract(issue_text)
         # Honor explicit key:value replies deterministically; do not rely on the LLM to
         # re-extract a simple clarification such as "region: us-east-1".
-        # Deterministic recovery of values explicitly present in the issue.
         # The model must not discard the application/repository name supplied by the user.
         explicit_repo = re.findall(r"(?i)\binfra-[a-z0-9]+(?:-[a-z0-9]+)*\b", issue_text)
         if explicit_repo:
@@ -220,17 +250,43 @@ def main():
         explicit_environment = re.findall(r"(?i)\bentorno\s*:\s*(dev|test|staging|prod)\b", issue_text)
         if explicit_environment:
             data["environment"] = explicit_environment[-1].lower()
+    except Exception as exc:
+        report_failure(ctx, exc)
+        raise
+    set_output("continuar", "true")
+    set_output("extraccion", to_json_line(data))
+
+
+def stage_validate():
+    """Etapa 2: valida contra el catalogo. Si faltan datos, los pide en el issue y se detiene."""
+    ctx = read_context()
+    try:
+        data = json.loads(os.environ["EXTRACTION_JSON"])
         errors = validate(data)
         if errors:
             issue_comment(
-                source_repo, number,
+                ctx["source_repo"], ctx["number"],
                 "## Infrastructure Copilot — faltan datos obligatorios\n\n" +
                 "Entendí tu solicitud. Antes de generar Terraform y crear el repositorio, necesito estos datos obligatorios:\n\n" +
                 "\n".join("- " + error for error in errors) +
                 "\n\n**Puedes responder normalmente en español**; no necesitas usar comandos ni repetir los datos que ya proporcionaste. " +
                 "Cuando estén completos los datos requeridos por el módulo seleccionado, continuaré con el repositorio y el Pull Request. No se despliegan recursos en AWS."
             )
+            set_output("listo", "false")
             return
+    except Exception as exc:
+        report_failure(ctx, exc)
+        raise
+    set_output("listo", "true")
+    set_output("solicitud", to_json_line(data))
+
+
+def stage_propose():
+    """Etapa 3: crea el repositorio, el main.tf y abre el Pull Request. Nunca ejecuta terraform apply."""
+    ctx = read_context()
+    source_repo, number = ctx["source_repo"], ctx["number"]
+    try:
+        data = json.loads(os.environ["REQUEST_JSON"])
 
         repo_name = data["repository_name"]
         target_repo = OWNER + "/" + repo_name
@@ -451,9 +507,24 @@ def main():
             "Created repository " + target_repo + " from the public template and opened a Pull Request: " + pr_url +
             "\n\nThe selected shared Terraform module is referenced remotely and downloaded during terraform init. No AWS resources were created."
         )
+        issue_comment(
+            source_repo, number,
+            "Created repository " + target_repo + " from the public template and opened a Pull Request: " + pr_url +
+            "\n\nThe selected shared Terraform module is referenced remotely and downloaded during terraform init. No AWS resources were created."
+        )
     except Exception as exc:
-        issue_comment(source_repo, number, "I couldn't complete the request: " + str(exc)[:1500] + "\nNo AWS resources were deployed.")
+        report_failure(ctx, exc)
         raise
+
+
+STAGES = {"extract": stage_extract, "validate": stage_validate, "propose": stage_propose}
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 1 or argv[0] not in STAGES:
+        sys.exit("Uso: python src/copilot.py {" + "|".join(STAGES) + "}")
+    STAGES[argv[0]]()
 
 
 if __name__ == "__main__":
